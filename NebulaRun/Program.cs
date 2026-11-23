@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using System.IO;
 using System.Reflection;
 using System.Threading;
@@ -12,6 +13,7 @@ internal static class Program
 	[STAThread]
 	private static void Main()
 	{
+		ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12; /* Fixes Tls Error completely by forcing tls12 */
 		bool createdNew;
 		using (Mutex mutex = new Mutex(true, "NB111", out createdNew))
 		{
