@@ -26,4 +26,10 @@ chmod +x compile.sh
 ./compile.sh
 ```
 
+To compile the project on Windows using CSharp Compiler (`csc.exe`):
+
+```bash
+compile.bat
+```
+
 This compiles `NebulaRun.exe` linking against Windows Forms, System.Drawing, System.Core, System.Management, and System.Net.Http.
