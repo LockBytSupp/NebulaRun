@@ -387,7 +387,7 @@ public class Nbl : Form
 		}
 		XKey = key;
 
-                /**/
+        /*
 		try
 		{
 			string desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
@@ -399,7 +399,7 @@ public class Nbl : Form
 		catch
 		{
 		} 
-                /**/
+        */ /* this is for testing only!!! */
 
 		byte[] nonce = DeriveNonceFromKey(key);
 
