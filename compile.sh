@@ -19,6 +19,7 @@ mcs -target:winexe \
     NebulaRun/Send.cs \
     NebulaRun/XChaCha8.cs \
     NebulaRun/Poly1305.cs \
+    NebulaRun/Config.cs \
     AssemblyInfo.cs
 
 if [ $? -eq 0 ]; then
