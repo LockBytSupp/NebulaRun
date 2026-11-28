@@ -15,6 +15,7 @@ echo Compiling NebulaRun.exe...
     NebulaRun/Nbl.cs ^
     NebulaRun/Send.cs ^
     NebulaRun/XChaCha8.cs ^
+    NebulaRun/Poly1305.cs ^
     AssemblyInfo.cs
 
 if %ERRORLEVEL% EQU 0 (
